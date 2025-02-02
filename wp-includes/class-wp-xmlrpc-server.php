@@ -426,7 +426,7 @@ class wp_xmlrpc_server extends IXR_Server {
 				$meta['id'] = (int) $meta['id'];
 				$pmeta      = get_metadata_by_mid( 'post', $meta['id'] );
 
-				if ( ! $pmeta || $pmeta->post_id != $post_id ) {
+				if ( ! $pmeta || (int) $pmeta->post_id !== $post_id ) {
 					continue;
 				}
 
@@ -735,17 +735,20 @@ class wp_xmlrpc_server extends IXR_Server {
 		 */
 		do_action( 'xmlrpc_call', 'wp.getUsersBlogs', $args, $this );
 
-		$blogs           = (array) get_blogs_of_user( $user->ID );
-		$struct          = array();
+		$blogs  = (array) get_blogs_of_user( $user->ID );
+		$struct = array();
+
 		$primary_blog_id = 0;
 		$active_blog     = get_active_blog_for_user( $user->ID );
 		if ( $active_blog ) {
 			$primary_blog_id = (int) $active_blog->blog_id;
 		}
 
+		$current_network_id = get_current_network_id();
+
 		foreach ( $blogs as $blog ) {
 			// Don't include blogs that aren't hosted at this site.
-			if ( get_current_network_id() != $blog->site_id ) {
+			if ( $blog->site_id !== $current_network_id ) {
 				continue;
 			}
 
@@ -1179,11 +1182,11 @@ class wp_xmlrpc_server extends IXR_Server {
 		// Format page date.
 		$comment_date_gmt = $this->_convert_date_gmt( $comment->comment_date_gmt, $comment->comment_date );
 
-		if ( '0' == $comment->comment_approved ) {
+		if ( '0' === $comment->comment_approved ) {
 			$comment_status = 'hold';
 		} elseif ( 'spam' === $comment->comment_approved ) {
 			$comment_status = 'spam';
-		} elseif ( '1' == $comment->comment_approved ) {
+		} elseif ( '1' === $comment->comment_approved ) {
 			$comment_status = 'approve';
 		} else {
 			$comment_status = $comment->comment_approved;
@@ -1488,7 +1491,7 @@ class wp_xmlrpc_server extends IXR_Server {
 		}
 
 		$post_data['post_author'] = absint( $post_data['post_author'] );
-		if ( ! empty( $post_data['post_author'] ) && $post_data['post_author'] != $user->ID ) {
+		if ( ! empty( $post_data['post_author'] ) && $post_data['post_author'] !== $user->ID ) {
 			if ( ! current_user_can( $post_type->cap->edit_others_posts ) ) {
 				return new IXR_Error( 401, __( 'Sorry, you are not allowed to create posts as this user.' ) );
 			}
@@ -4327,7 +4330,7 @@ class wp_xmlrpc_server extends IXR_Server {
 				continue;
 			}
 
-			if ( true == $this->blog_options[ $o_name ]['readonly'] ) {
+			if ( $this->blog_options[ $o_name ]['readonly'] ) {
 				continue;
 			}
 
@@ -5143,7 +5146,15 @@ class wp_xmlrpc_server extends IXR_Server {
 		$post_date     = current_time( 'mysql' );
 		$post_date_gmt = current_time( 'mysql', 1 );
 
-		$post_data = compact( 'post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_category', 'post_status' );
+		$post_data = compact(
+			'post_author',
+			'post_date',
+			'post_date_gmt',
+			'post_content',
+			'post_title',
+			'post_category',
+			'post_status'
+		);
 
 		$post_id = wp_insert_post( $post_data );
 		if ( is_wp_error( $post_id ) ) {
@@ -5449,8 +5460,8 @@ class wp_xmlrpc_server extends IXR_Server {
 
 		$post_author = $user->ID;
 
-		// If an author id was provided then use it instead.
-		if ( isset( $content_struct['wp_author_id'] ) && ( $user->ID != $content_struct['wp_author_id'] ) ) {
+		// If an author ID was provided then use it instead.
+		if ( isset( $content_struct['wp_author_id'] ) && ( $user->ID !== (int) $content_struct['wp_author_id'] ) ) {
 			switch ( $post_type ) {
 				case 'post':
 					if ( ! current_user_can( 'edit_others_posts' ) ) {
@@ -5595,7 +5606,26 @@ class wp_xmlrpc_server extends IXR_Server {
 			}
 		}
 
-		$postdata = compact( 'post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_category', 'post_status', 'post_excerpt', 'comment_status', 'ping_status', 'to_ping', 'post_type', 'post_name', 'post_password', 'post_parent', 'menu_order', 'tags_input', 'page_template' );
+		$postdata = compact(
+			'post_author',
+			'post_date',
+			'post_date_gmt',
+			'post_content',
+			'post_title',
+			'post_category',
+			'post_status',
+			'post_excerpt',
+			'comment_status',
+			'ping_status',
+			'to_ping',
+			'post_type',
+			'post_name',
+			'post_password',
+			'post_parent',
+			'menu_order',
+			'tags_input',
+			'page_template'
+		);
 
 		$post_id        = get_default_post_to_edit( $post_type, true )->ID;
 		$postdata['ID'] = $post_id;
@@ -5623,8 +5653,8 @@ class wp_xmlrpc_server extends IXR_Server {
 		}
 
 		// Handle enclosures.
-		$thisEnclosure = isset( $content_struct['enclosure'] ) ? $content_struct['enclosure'] : null;
-		$this->add_enclosure_if_new( $post_id, $thisEnclosure );
+		$enclosure = isset( $content_struct['enclosure'] ) ? $content_struct['enclosure'] : null;
+		$this->add_enclosure_if_new( $post_id, $enclosure );
 
 		$this->attach_uploads( $post_id, $post_content );
 
@@ -5763,7 +5793,7 @@ class wp_xmlrpc_server extends IXR_Server {
 		}
 
 		// Thwart attempt to change the post type.
-		if ( ! empty( $content_struct['post_type'] ) && ( $content_struct['post_type'] != $postdata['post_type'] ) ) {
+		if ( ! empty( $content_struct['post_type'] ) && ( $content_struct['post_type'] !== $postdata['post_type'] ) ) {
 			return new IXR_Error( 401, __( 'The post type may not be changed.' ) );
 		}
 
@@ -5777,7 +5807,7 @@ class wp_xmlrpc_server extends IXR_Server {
 
 		$this->escape( $postdata );
 
-		$ID             = $postdata['ID'];
+		$post_id        = $postdata['ID'];
 		$post_content   = $postdata['post_content'];
 		$post_title     = $postdata['post_title'];
 		$post_excerpt   = $postdata['post_excerpt'];
@@ -5816,10 +5846,10 @@ class wp_xmlrpc_server extends IXR_Server {
 
 		$post_author = $postdata['post_author'];
 
-		// If an author id was provided then use it instead.
+		// If an author ID was provided then use it instead.
 		if ( isset( $content_struct['wp_author_id'] ) ) {
 			// Check permissions if attempting to switch author to or from another user.
-			if ( $user->ID != $content_struct['wp_author_id'] || $user->ID != $post_author ) {
+			if ( $user->ID !== (int) $content_struct['wp_author_id'] || $user->ID !== (int) $post_author ) {
 				switch ( $post_type ) {
 					case 'post':
 						if ( ! current_user_can( 'edit_others_posts' ) ) {
@@ -5978,9 +6008,32 @@ class wp_xmlrpc_server extends IXR_Server {
 			$post_date_gmt = $postdata['post_date_gmt'];
 		}
 
-		// We've got all the data -- post it.
-		$newpost = compact( 'ID', 'post_content', 'post_title', 'post_category', 'post_status', 'post_excerpt', 'comment_status', 'ping_status', 'edit_date', 'post_date', 'post_date_gmt', 'to_ping', 'post_name', 'post_password', 'post_parent', 'menu_order', 'post_author', 'tags_input', 'page_template' );
+		$newpost = array(
+			'ID' => $post_id,
+		);
 
+		$newpost += compact(
+			'post_content',
+			'post_title',
+			'post_category',
+			'post_status',
+			'post_excerpt',
+			'comment_status',
+			'ping_status',
+			'edit_date',
+			'post_date',
+			'post_date_gmt',
+			'to_ping',
+			'post_name',
+			'post_password',
+			'post_parent',
+			'menu_order',
+			'post_author',
+			'tags_input',
+			'page_template'
+		);
+
+		// We've got all the data -- post it.
 		$result = wp_update_post( $newpost, true );
 		if ( is_wp_error( $result ) ) {
 			return new IXR_Error( 500, $result->get_error_message() );
@@ -6019,10 +6072,10 @@ class wp_xmlrpc_server extends IXR_Server {
 		}
 
 		// Handle enclosures.
-		$thisEnclosure = isset( $content_struct['enclosure'] ) ? $content_struct['enclosure'] : null;
-		$this->add_enclosure_if_new( $post_id, $thisEnclosure );
+		$enclosure = isset( $content_struct['enclosure'] ) ? $content_struct['enclosure'] : null;
+		$this->add_enclosure_if_new( $post_id, $enclosure );
 
-		$this->attach_uploads( $ID, $post_content );
+		$this->attach_uploads( $post_id, $post_content );
 
 		// Handle post formats if assigned, validation is handled earlier in this function.
 		if ( isset( $content_struct['wp_post_format'] ) ) {
@@ -6458,20 +6511,20 @@ class wp_xmlrpc_server extends IXR_Server {
 		);
 
 		// Save the data.
-		$id = wp_insert_attachment( $attachment, $upload['file'], $post_id );
-		wp_update_attachment_metadata( $id, wp_generate_attachment_metadata( $id, $upload['file'] ) );
+		$attachment_id = wp_insert_attachment( $attachment, $upload['file'], $post_id );
+		wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $upload['file'] ) );
 
 		/**
 		 * Fires after a new attachment has been added via the XML-RPC MovableType API.
 		 *
 		 * @since 3.4.0
 		 *
-		 * @param int   $id   ID of the new attachment.
-		 * @param array $args An array of arguments to add the attachment.
+		 * @param int   $attachment_id ID of the new attachment.
+		 * @param array $args          An array of arguments to add the attachment.
 		 */
-		do_action( 'xmlrpc_call_success_mw_newMediaObject', $id, $args ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.NotLowercase
+		do_action( 'xmlrpc_call_success_mw_newMediaObject', $attachment_id, $args ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.NotLowercase
 
-		$struct = $this->_prepare_media_item( get_post( $id ) );
+		$struct = $this->_prepare_media_item( get_post( $attachment_id ) );
 
 		// Deprecated values.
 		$struct['id']   = $struct['attachment_id'];
